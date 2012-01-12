@@ -1,11 +1,11 @@
 sbtPlugin := true
 
-organization := "com.github.gseitz"
+organization := "com.github.jrray"
 
-name := "sbt-protobuf"
+name := "sbt-zeroc-ice"
 
-version := "0.2.2"
+version := "0.0.1"
 
 scalacOptions := Seq("-deprecation", "-unchecked")
 
-publishTo := Some(Resolver.file("gseitz@github", file(Path.userHome + "/dev/repo")))
+publishTo := Some(Resolver.file("jrray@github", file(Path.userHome + "/dev/repo")))
