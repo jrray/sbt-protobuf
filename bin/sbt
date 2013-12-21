@@ -1,0 +1,60 @@
+#!/bin/sh
+
+export http_proxy=http://proxy.spimageworks.com:8080/
+
+# ORACLE_HOME should match deploy/server/tomcat/bin/setenv.sh
+export ORACLE_HOME=/net/apps/rhel40m64/oracle/product/11.2.0.3.1/full_client
+export LD_LIBRARY_PATH=/shots/spi/home/java/FileSequence/x86_64/v6/:${ORACLE_HOME}/lib
+export TNS_ADMIN=/net/common/tns
+
+# Many sbt jobs running concurrently can fight for locks protecting
+# the repository cache directories.  If running under Jenkins, then
+# set HOME and Java's user.home property to a local home directory
+# just underneath Jenkin's workspace directory.  This will result in
+# only a few processes fighting over the lock instead of many.
+if test "$USER" = "jenkins" && test "$WORKSPACE"; then
+  # Walk up the directory tree looking for a directory named "jenkins"
+  # and assume that this is Jenkin's workspace root directory.  Do a
+  # walk because free-style and multi-configuration jobs exist at
+  # different depths in the Jenkins workspace.
+  #
+  # Start the search one level up from $WORKSPACE to avoid a potential
+  # problem if $WORKSPACE's basename is "jenkins".
+  jenkins_root=$(dirname $WORKSPACE)
+  while test "$jenkins_root" != /; do
+    bn=$(basename $jenkins_root)
+    if test "$bn" = "jenkins"; then
+      break
+    fi
+    jenkins_root=$(dirname $jenkins_root)
+  done
+
+  if test "$jenkins_root" = /; then
+    echo "$0: could not determine Jenkins workspace dir from $WORKSPACE" 1>&2
+    exit 1
+  fi
+
+  export HOME=$jenkins_root/home
+
+  echo "$0: setting HOME and Java's user.home property to $HOME"
+
+  mkdir -p $HOME
+  EXTRA_JVM_OPTS=-Duser.home=$HOME
+fi
+
+exec \
+  /usr/bin/java \
+    -Dfile.encoding=UTF8 \
+    -Dhttp.proxyHost=proxy.spimageworks.com \
+    -Dhttp.proxyPort=8080 \
+    -Dhttps.proxyHost=proxy.spimageworks.com \
+    -Dhttps.proxyPort=8080 \
+    -Djava.net.preferIPv4Stack=true \
+    -Xmx2G \
+    -XX:+CMSClassUnloadingEnabled \
+    -XX:MaxPermSize=512M \
+    -XX:ReservedCodeCacheSize=192m \
+    $EXTRA_JVM_OPTS \
+    -Dscalac.patmat.analysisBudget=512 \
+    -jar `dirname $0`/sbt-launch.jar \
+      $@

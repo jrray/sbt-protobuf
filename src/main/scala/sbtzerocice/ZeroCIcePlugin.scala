@@ -1,7 +1,6 @@
 package sbtzerocice
 
 import sbt._
-import Process._
 import Keys._
 
 import java.io.File
@@ -11,19 +10,19 @@ object ZeroCIcePlugin extends Plugin {
   import IceKeys._
 
   object IceKeys {
-    val slice2java = TaskKey[Seq[File]]("slice2java", "Generate java sources.")
-    val slice2javaBin = SettingKey[String]("slice2java.bin", "The path+name of the slice2java executable.")
+    val slice2java = taskKey[Seq[File]]("Generate java sources.")
+    val slice2javaBin = settingKey[String]("The path+name of the slice2java executable.")
 
-    val includePaths = TaskKey[Seq[File]]("include-paths", "The paths that contain *.ice dependencies.")
-    val stream = SettingKey[Boolean]("stream", "Generate marshaling support for public stream API.")
-    val underscore = SettingKey[Boolean]("underscore", "Permit use of underscores in slice identifiers.")
-    val checksum = SettingKey[Option[String]]("checksum", "Generate checksums for Slice definitions into CLASS.")
-    val externalIncludePath = SettingKey[File]("external-include-path", "The path to which zerocice:library-dependencies are extracted and which is used as zerocice:include-path for slice2java")
+    val includePaths = taskKey[Seq[File]]("The paths that contain *.ice dependencies.")
+    val stream = settingKey[Boolean]("Generate marshaling support for public stream API.")
+    val underscore = settingKey[Boolean]("Permit use of underscores in slice identifiers.")
+    val checksum = settingKey[Option[String]]("Generate checksums for Slice definitions into CLASS.")
+    val externalIncludePath = settingKey[File]("The path to which zerocice:library-dependencies are extracted and which is used as zerocice:include-path for slice2java")
 
-    val unpackDependencies = TaskKey[UnpackedDependencies]("zerocice-unpack-dependencies", "Unpack dependencies.")
+    val unpackDependencies = taskKey[UnpackedDependencies]("Unpack dependencies.")
 
-    val filter = SettingKey[FileFilter]("filter", "Filter for selecting ice sources from default directories.")
-    val excludeFilter = SettingKey[FileFilter]("exclude-filter", "Filter for excluding files from default directories.")
+    val filter = settingKey[FileFilter]("Filter for selecting ice sources from default directories.")
+    val excludeFilter = settingKey[FileFilter]("Filter for excluding files from default directories.")
   }
 
   private def zerociceSourcesTask =
@@ -34,20 +33,25 @@ object ZeroCIcePlugin extends Plugin {
 
   def zerociceSettingsIn(c: Configuration): Seq[Setting[_]] =
     inConfig(c)(zerociceSettings0 ++ Seq(
-      sourceDirectory in slice2java <<= (sourceDirectory in c) { _ / "main" / "slice" },
-      javaSource in slice2java <<= (sourceManaged in c) { _ / "compiled_slice" },
-      externalIncludePath <<= target(_ / "zerocice_external"),
+      (sourceDirectory in slice2java) := (sourceDirectory in c).value / "main" / "slice",
+      (javaSource in slice2java) := (sourceManaged in c).value / "compiled_slice",
+      externalIncludePath := target.value / "zerocice_external",
 
-      managedClasspath <<= (classpathTypes, update) map { (ct, report) =>
-        Classpaths.managedJars(c, ct, report)
+      managedClasspath := Classpaths.managedJars(c, classpathTypes.value, update.value),
+
+      unpackDependencies := {
+        val extractedFiles = unpack(
+          (managedClasspath in slice2java).value.map(_.data),
+          (externalIncludePath in slice2java).value,
+          streams.value.log)
+        UnpackedDependencies(
+          (externalIncludePath in slice2java).value, extractedFiles)
       },
 
-      unpackDependencies <<= unpackDependenciesTask,
+      (includePaths in slice2java) := (sourceDirectory in c).value :: Nil,
+      (includePaths in slice2java) += (unpackDependencies in slice2java).value.dir,
 
-      includePaths in slice2java <<= (sourceDirectory in c) map (identity(_) :: Nil),
-      includePaths in slice2java <+= unpackDependencies in slice2java map { _.dir },
-
-      watchSources in slice2java <<= (unmanagedSources in slice2java)
+      (watchSources in slice2java) := (unmanagedSources in slice2java).value
 
     )) ++ Seq(
       sourceGenerators in Compile <+= (slice2java in c),
@@ -66,10 +70,31 @@ object ZeroCIcePlugin extends Plugin {
     stream in slice2java := false,
     underscore in slice2java := false,
     checksum in slice2java := None,
-    slice2java <<= sourceGeneratorTask,
+    slice2java := {
+      val cachedCompile = FileFunction.cached(
+        streams.value.cacheDirectory / "zerocice",
+        inStyle = FilesInfo.lastModified, outStyle = FilesInfo.exists) {
+        (in: Set[File]) =>
+          compile(
+            (slice2javaBin in slice2java).value,
+            (sourceDirectory in slice2java).value,
+            (excludeFilter in slice2java).value,
+            (javaSource in slice2java).value,
+            (includePaths in slice2java).value,
+            (stream in slice2java).value,
+            (underscore in slice2java).value,
+            (checksum in slice2java).value,
+            streams.value.log)
+      }
+      val srcs = (sourceDirectory in slice2java).value.descendantsExcept(
+        "*.ice", (excludeFilter in slice2java).value).get.toSet
+      cachedCompile(srcs).toSeq
+    },
     filter in slice2java := "*.ice",
     excludeFilter in slice2java := (".*" - ".") || HiddenFileFilter,
-    unmanagedSources in slice2java <<= zerociceSourcesTask
+    unmanagedSources in slice2java :=
+      (sourceDirectory in slice2java).value.descendantsExcept(
+        (filter in slice2java).value, (excludeFilter in slice2java).value).get
   )
 
   case class UnpackedDependencies(dir: File, files: Seq[File])
@@ -84,10 +109,12 @@ object ZeroCIcePlugin extends Plugin {
       val incPath = includePaths.map(_.absolutePath).mkString("-I", " -I", "")
       val streamArg = if (stream) "--stream" else ""
       val underscoreArg = if (underscore) "--underscore" else ""
-      val checksumArg = if (checksum.isDefined) "--checksum %s".format(checksum.get) else ""
-      <x>{slice2javaCommand} {streamArg} {underscoreArg} {checksumArg} {incPath} --output-dir={target.absolutePath} {schemas.map(_.absolutePath).mkString(" ")}</x> ! log
+      val checksumArg = if (checksum.isDefined) s"--checksum $checksum" else ""
+      val cmd = s"""${slice2javaCommand} ${streamArg} ${underscoreArg} ${checksumArg} ${incPath} --output-dir=${target.absolutePath} ${schemas.map(_.absolutePath).mkString(" ")}"""
+      log.info(s"Executing: $cmd")
+      cmd ! log
     } catch { case e: Exception =>
-      throw new RuntimeException("error occured while compiling zerocice files: %s" format(e.getMessage), e)
+      throw new RuntimeException(s"error occured while compiling zerocice files: ${e.getMessage}", e)
     }
 
 
@@ -119,35 +146,4 @@ object ZeroCIcePlugin extends Plugin {
       seq
     }
   }
-
-  private def sourceGeneratorTask =
-    (streams,
-     sourceDirectory in slice2java,
-     excludeFilter in slice2java,
-     javaSource in slice2java,
-     includePaths in slice2java,
-     stream in slice2java,
-     underscore in slice2java,
-     checksum in slice2java,
-     cacheDirectory in slice2java,
-     slice2javaBin in slice2java) map {
-    (out, srcDir, excludeFilter, targetDir, includePaths, stream, underscore,
-     checksum, cache, slice2javaCommand) =>
-      val cachedCompile = FileFunction.cached(
-        cache / "zerocice",
-        inStyle = FilesInfo.lastModified, outStyle = FilesInfo.exists) {
-        (in: Set[File]) =>
-          compile(slice2javaCommand, srcDir, excludeFilter, targetDir,
-                  includePaths, stream, underscore, checksum, out.log)
-      }
-      val srcs = srcDir.descendantsExcept("*.ice", excludeFilter).get.toSet
-      cachedCompile(srcs).toSeq
-  }
-
-  private def unpackDependenciesTask = (streams, managedClasspath in slice2java, externalIncludePath in slice2java) map {
-    (out, deps, extractTarget) =>
-      val extractedFiles = unpack(deps.map(_.data), extractTarget, out.log)
-      UnpackedDependencies(extractTarget, extractedFiles)
-  }
-
 }
