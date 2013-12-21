@@ -1,10 +1,12 @@
+scalaVersion := "2.9.2"
+
 sbtPlugin := true
 
 organization := "com.imageworks"
 
 name := "sbt-zeroc-ice"
 
-version := "0.0.1"
+version := "0.0.5"
 
 scalacOptions := Seq("-deprecation", "-unchecked")
 
