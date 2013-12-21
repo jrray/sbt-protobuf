@@ -58,7 +58,6 @@ object ZeroCIcePlugin extends Plugin {
       managedSourceDirectories in Compile <+= (javaSource in slice2java in c),
       cleanFiles <+= (javaSource in slice2java in c),
       watchSources <++= (unmanagedSources in slice2java in c),
-      // libraryDependencies <+= (version in c)("com.google.zerocice" % "zerocice-java" % _),
       ivyConfigurations += c
     )
 
