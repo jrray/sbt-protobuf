@@ -6,7 +6,7 @@ organization := "com.imageworks"
 
 name := "sbt-zeroc-ice"
 
-version := "0.0.5"
+version := "0.0.6"
 
 scalacOptions := Seq("-deprecation", "-unchecked")
 
