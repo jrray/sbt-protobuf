@@ -48,10 +48,10 @@ object ZeroCIcePlugin extends Plugin {
       (watchSources in slice2java) := (unmanagedSources in slice2java).value
 
     )) ++ Seq(
-      sourceGenerators in Compile <+= (slice2java in c),
-      managedSourceDirectories in Compile <+= (javaSource in slice2java in c),
-      cleanFiles <+= (javaSource in slice2java in c),
-      watchSources <++= (unmanagedSources in slice2java in c),
+      (sourceGenerators in Compile) += (slice2java in c).taskValue,
+      (managedSourceDirectories in Compile) += (javaSource in slice2java in c).value,
+      cleanFiles += (javaSource in slice2java in c).value,
+      watchSources ++= (unmanagedSources in slice2java in c).value,
       ivyConfigurations += c
     )
 
