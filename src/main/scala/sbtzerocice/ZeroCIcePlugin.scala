@@ -25,12 +25,6 @@ object ZeroCIcePlugin extends Plugin {
     val excludeFilter = settingKey[FileFilter]("Filter for excluding files from default directories.")
   }
 
-  private def zerociceSourcesTask =
-    (sourceDirectory in slice2java, filter in slice2java, excludeFilter in slice2java) map {
-      (sourceDir, filt, excl) =>
-        sourceDir.descendantsExcept(filt, excl).get
-    }
-
   def zerociceSettingsIn(c: Configuration): Seq[Setting[_]] =
     inConfig(c)(zerociceSettings0 ++ Seq(
       (sourceDirectory in slice2java) := (sourceDirectory in c).value / "main" / "slice",
