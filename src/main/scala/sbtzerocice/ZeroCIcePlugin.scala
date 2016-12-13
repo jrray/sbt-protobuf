@@ -31,7 +31,7 @@ object ZeroCIcePlugin extends Plugin {
       (javaSource in slice2java) := (sourceManaged in c).value / "compiled_slice",
       externalIncludePath := target.value / "zerocice_external",
 
-      managedClasspath := Classpaths.managedJars(c, classpathTypes.value, update.value),
+      (managedClasspath in slice2java) := Classpaths.managedJars(c, classpathTypes.value, update.value),
 
       unpackDependencies := {
         val extractedFiles = unpack(
