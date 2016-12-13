@@ -27,7 +27,7 @@ object ZeroCIcePlugin extends Plugin {
 
   def zerociceSettingsIn(c: Configuration): Seq[Setting[_]] =
     inConfig(c)(zerociceSettings0 ++ Seq(
-      (sourceDirectory in slice2java) := (sourceDirectory in c).value / "main" / "slice",
+      (sourceDirectory in slice2java) := (sourceDirectory in c).value / "slice",
       (javaSource in slice2java) := (sourceManaged in c).value / "compiled_slice",
       externalIncludePath := target.value / "zerocice_external",
 
