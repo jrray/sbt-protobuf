@@ -1,6 +1,10 @@
 #!/bin/sh
 
-export http_proxy=http://proxy.spimageworks.com:8080/
+if [ -z ${proxy_hostname+x} ]; then
+    proxy_hostname=proxy.spimageworks.com
+fi
+
+export http_proxy=http://${proxy_hostname}:8080/
 
 # ORACLE_HOME should match deploy/server/tomcat/bin/setenv.sh
 export ORACLE_HOME=/net/apps/rhel40m64/oracle/product/11.2.0.3.1/full_client
@@ -45,9 +49,9 @@ fi
 exec \
   /usr/bin/java \
     -Dfile.encoding=UTF8 \
-    -Dhttp.proxyHost=proxy.spimageworks.com \
+    -Dhttp.proxyHost=${proxy_hostname} \
     -Dhttp.proxyPort=8080 \
-    -Dhttps.proxyHost=proxy.spimageworks.com \
+    -Dhttps.proxyHost=${proxy_hostname} \
     -Dhttps.proxyPort=8080 \
     -Djava.net.preferIPv4Stack=true \
     -Xmx2G \
