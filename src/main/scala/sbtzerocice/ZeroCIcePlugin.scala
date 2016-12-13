@@ -108,7 +108,7 @@ object ZeroCIcePlugin extends Plugin {
       val incPath = includePaths.map(_.absolutePath).mkString("-I", " -I", "")
       val streamArg = if (stream) "--stream" else ""
       val underscoreArg = if (underscore) "--underscore" else ""
-      val checksumArg = if (checksum.isDefined) s"--checksum $checksum" else ""
+      val checksumArg = if (checksum.isDefined) s"--checksum ${checksum.get}" else ""
       val cmd = s"""${slice2javaCommand} ${streamArg} ${underscoreArg} ${checksumArg} ${incPath} --output-dir=${target.absolutePath} ${schemas.map(_.absolutePath).mkString(" ")}"""
       log.info(s"Executing: $cmd")
       cmd ! log
